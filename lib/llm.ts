@@ -1,7 +1,4 @@
 // lib/llm.ts
-// Groq integration — llama-3.3-70b-versatile is free tier, fast, and multilingual.
-// Fallback: OpenRouter (also free tier with some models).
-
 import { TenantConfig } from "./tenants";
 import { ClippingResult, CATEGORIES } from "./types";
 
@@ -9,47 +6,45 @@ const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 function buildSystemPrompt(tenant: TenantConfig, mode: string, queryTopic?: string): string {
-  const sourceList = [
-    ...tenant.sources.local,
-    ...tenant.sources.regional,
-    ...tenant.sources.national,
-  ].join(", ");
-
   const categoryList = CATEGORIES.join(", ");
 
   return `Sos un editor de noticias local especializado en ${tenant.municipality}, ${tenant.province}, Argentina.
-Tu tarea es generar un clipping de noticias estructurado en formato JSON estricto.
+Tu tarea es generar un clipping de noticias en JSON estricto.
 
-MODO ACTUAL: ${mode === "topic" ? `Temático — foco en: "${queryTopic}"` : "General — todas las noticias relevantes"}
+MODO: ${mode === "topic" ? `Temático — solo noticias de la sección/categoría: "${queryTopic}"` : "General — todas las noticias relevantes del día"}
 
-FUENTES A CUBRIR (en orden de prioridad):
-${sourceList}
-
-CATEGORÍAS VÁLIDAS (usar exactamente estas):
+CATEGORÍAS VÁLIDAS (exactas):
 ${categoryList}
 
-INSTRUCCIONES:
-1. Identificar 5-7 TÓPICOS DEL DÍA: temas con mayor presencia editorial cruzada en los portales (locales, provinciales y nacionales). Pueden ser locales, provinciales o nacionales con impacto local. Formular en 2-4 palabras concretas.
-2. Extraer entre 10 y 20 NOTICIAS relevantes para ${tenant.municipality} y su región.
-3. Para cada noticia: título claro, resumen de 1-2 párrafos en lenguaje neutral e institucional, fuente, fecha y categoría.
-4. NO inventar datos. Si algo no está en el contexto provisto, no incluirlo.
-5. Lenguaje neutral, voz activa, oraciones cortas. Sin sensacionalismo.
+INSTRUCCIONES OBLIGATORIAS:
 
-RESPONDER ÚNICAMENTE con JSON válido. Sin texto antes ni después. Sin backticks. Sin comentarios.
+1. TÓPICOS DEL DÍA (5 a 7):
+   - Son los temas con mayor presencia editorial CRUZADA en todos los portales del contexto.
+   - Pueden ser locales (de ${tenant.municipality}), provinciales (Buenos Aires) o nacionales (Argentina).
+   - Regla: si un tema aparece en 2 o más fuentes → es tópico.
+   - Formulá cada uno en 2-4 palabras concretas (ej: "Tarifas energía", "Seguridad rural", "Elecciones 2025").
+   - NO limitarlos solo a noticias locales.
 
-ESQUEMA JSON EXACTO:
+2. NOTICIAS (exactamente 20, o todas las disponibles si hay menos):
+   - Para MODO TEMÁTICO: incluir SOLO noticias cuya sección/categoría coincida con "${queryTopic}". Si no hay suficientes, indicarlo en el campo title con "Sin resultados en esta sección".
+   - Para cada noticia incluir url si está disponible en el contexto.
+   - Título claro, resumen 1-2 párrafos, lenguaje neutral e institucional.
+   - No inventar datos. Solo lo que esté en el contexto.
+
+ESQUEMA JSON (responder SOLO esto, sin texto extra, sin backticks):
 {
   "topics": [
-    { "label": "string (2-4 palabras)", "icon": "emoji" }
+    { "label": "string 2-4 palabras", "icon": "emoji", "scope": "local|provincial|nacional" }
   ],
   "news": [
     {
       "title": "string",
-      "summary": "string (1-2 párrafos separados por \\n\\n)",
-      "source": "string (nombre del medio)",
-      "date": "string (ej: 19 de mayo de 2026)",
-      "url": "string o null",
-      "category": "una de: ${categoryList}"
+      "summary": "string párrafo 1\\n\\npárrafo 2 opcional",
+      "source": "nombre del medio",
+      "date": "DD de mes de YYYY",
+      "url": "https://... o null",
+      "category": "una de: ${categoryList}",
+      "section": "sección del portal si se conoce"
     }
   ]
 }`;
@@ -65,14 +60,7 @@ export async function generateClipping(
   if (!apiKey) throw new Error("GROQ_API_KEY no configurada");
 
   const systemPrompt = buildSystemPrompt(tenant, mode, queryTopic);
-
-  const userMessage = `Aquí está el contenido scrapeado de los portales de noticias para ${tenant.municipality}:
-
-${scrapedContent}
-
-Fecha actual: ${new Date().toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })}
-
-Generá el clipping completo siguiendo las instrucciones del sistema. Respondé SOLO con JSON.`;
+  const userMessage = `Contenido scrapeado de los portales (${new Date().toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })}):\n\n${scrapedContent}\n\nGenerá el JSON del clipping ahora.`;
 
   const res = await fetch(GROQ_API_URL, {
     method: "POST",
@@ -100,18 +88,13 @@ Generá el clipping completo siguiendo las instrucciones del sistema. Respondé 
   const data = await res.json();
   const raw = data.choices?.[0]?.message?.content ?? "{}";
 
-  // Strict JSON parse with fallback
   let parsed: { topics?: unknown[]; news?: unknown[] };
   try {
     parsed = JSON.parse(raw);
   } catch {
-    // Try to extract JSON from markdown fences
     const match = raw.match(/```(?:json)?\s*([\s\S]+?)```/);
-    if (match) {
-      parsed = JSON.parse(match[1]);
-    } else {
-      throw new Error("LLM no devolvió JSON válido");
-    }
+    if (match) parsed = JSON.parse(match[1]);
+    else throw new Error("LLM no devolvió JSON válido");
   }
 
   return {
@@ -120,7 +103,6 @@ Generá el clipping completo siguiendo las instrucciones del sistema. Respondé 
   };
 }
 
-// OpenRouter fallback (free models: mistralai/mistral-7b-instruct, etc.)
 export async function generateClippingOpenRouter(
   tenant: TenantConfig,
   scrapedContent: string,
@@ -144,7 +126,7 @@ export async function generateClippingOpenRouter(
       model: "mistralai/mistral-7b-instruct:free",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Contenido de portales:\n\n${scrapedContent}\n\nGenerá el clipping en JSON.` },
+        { role: "user", content: `Contenido:\n\n${scrapedContent}\n\nGenerá el JSON.` },
       ],
       temperature: 0.3,
       max_tokens: 4096,

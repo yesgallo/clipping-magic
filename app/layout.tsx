@@ -1,11 +1,17 @@
 // app/layout.tsx
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Clipping Magic",
   description: "Resumen de noticias locales",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1",
+};
+
+// viewport va en su propio export (Next 14.2+)
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

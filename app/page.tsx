@@ -1,29 +1,19 @@
 "use client";
-// app/page.tsx
 import { useState, useEffect, useCallback } from "react";
-import { ClippingResult, CATEGORY_STYLES, Category } from "@/lib/types";
+import { ClippingResult, CATEGORY_STYLES, SCOPE_STYLES, Category } from "@/lib/types";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("es-AR", {
-    day: "numeric", month: "long", year: "numeric",
-  });
-}
-
-function getTenantParam() {
-  if (typeof window === "undefined") return "";
-  return new URLSearchParams(window.location.search).get("tenant") ?? "bolivar";
-}
-
-// ─── Components ──────────────────────────────────────────────────────────────
-
-function Spinner() {
+function Spinner({ primary }: { primary: string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "48px 0" }}>
-      <div className="spinner" />
-      <p style={{ fontSize: 13, color: "#888", fontWeight: 400 }}>Generando clipping…</p>
-      <style>{`.spinner{width:32px;height:32px;border:3px solid #E0E4EA;border-top-color:var(--primary,#1B3A5C);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "48px 0" }}>
+      <div style={{
+        width: 32, height: 32,
+        border: `3px solid #E0E4EA`,
+        borderTopColor: primary,
+        borderRadius: "50%",
+        animation: "spin .8s linear infinite",
+      }} />
+      <p style={{ fontSize: 13, color: "#888" }}>Generando clipping…</p>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
@@ -44,9 +34,11 @@ function Badge({ category }: { category: Category }) {
 
 function NewsCard({ item, primary }: { item: ClippingResult["news"][0]; primary: string }) {
   const [copied, setCopied] = useState(false);
+  const hasUrl = item.url && item.url.startsWith("http");
 
   const copy = async () => {
-    await navigator.clipboard.writeText(`${item.title}\n\n${item.summary}\n\nFuente: ${item.source} · ${item.date}`);
+    const text = `${item.title}\n\n${item.summary}\n\nFuente: ${item.source} · ${item.date}${hasUrl ? `\n${item.url}` : ""}`;
+    await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -61,12 +53,26 @@ function NewsCard({ item, primary }: { item: ClippingResult["news"][0]; primary:
         <Badge category={item.category as Category} />
       </div>
 
-      <h3 style={{
-        fontFamily: "'DM Serif Display', serif",
-        fontSize: 16, fontWeight: 400, lineHeight: 1.35,
-        color: "#111827", marginBottom: 8,
-      }}>{item.title}</h3>
+      {/* Título — clickeable si hay URL */}
+      {hasUrl ? (
+        <a href={item.url!} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+          <h3 style={{
+            fontFamily: "'DM Serif Display', serif",
+            fontSize: 16, fontWeight: 400, lineHeight: 1.35,
+            color: primary, marginBottom: 8,
+            textDecoration: "underline", textDecorationColor: `${primary}40`,
+            textUnderlineOffset: 3,
+          }}>{item.title} ↗</h3>
+        </a>
+      ) : (
+        <h3 style={{
+          fontFamily: "'DM Serif Display', serif",
+          fontSize: 16, fontWeight: 400, lineHeight: 1.35,
+          color: "#111827", marginBottom: 8,
+        }}>{item.title}</h3>
+      )}
 
+      {/* Resumen con párrafos */}
       {item.summary.split("\n\n").map((p, i) => (
         <p key={i} style={{
           fontSize: 13, color: "#4B5563", lineHeight: 1.65,
@@ -74,36 +80,55 @@ function NewsCard({ item, primary }: { item: ClippingResult["news"][0]; primary:
         }}>{p}</p>
       ))}
 
+      {/* Footer */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         borderTop: "0.5px solid #F0F2F5", marginTop: 12, paddingTop: 10,
+        gap: 8,
       }}>
-        <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#9CA3AF", alignItems: "center" }}>
-          {item.url ? (
-            <a href={item.url} target="_blank" rel="noopener noreferrer"
+        <div style={{ display: "flex", gap: 8, fontSize: 11, color: "#9CA3AF", alignItems: "center", flexWrap: "wrap", flex: 1 }}>
+          {hasUrl ? (
+            <a href={item.url!} target="_blank" rel="noopener noreferrer"
               style={{ color: primary, fontWeight: 500 }}>{item.source}</a>
           ) : (
             <span style={{ fontWeight: 500, color: "#6B7280" }}>{item.source}</span>
           )}
           <span>·</span>
           <span>{item.date}</span>
+          {item.section && (
+            <>
+              <span>·</span>
+              <span style={{
+                background: "#F3F4F6", color: "#6B7280",
+                padding: "1px 7px", borderRadius: 10, fontSize: 10,
+              }}>#{item.section}</span>
+            </>
+          )}
         </div>
-        <button onClick={copy} style={{
-          fontSize: 11, padding: "3px 10px", borderRadius: 6,
-          border: `0.5px solid ${copied ? primary : "#E2E6ED"}`,
-          color: copied ? primary : "#6B7280",
-          background: copied ? `${primary}10` : "transparent",
-          display: "flex", alignItems: "center", gap: 4,
-          transition: "all .15s",
-        }}>
-          {copied ? "✓ Copiado" : "Copiar"}
-        </button>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          {hasUrl && (
+            <a href={item.url!} target="_blank" rel="noopener noreferrer" style={{
+              fontSize: 11, padding: "3px 10px", borderRadius: 6,
+              border: `0.5px solid ${primary}40`,
+              color: primary, background: `${primary}08`,
+              display: "flex", alignItems: "center", gap: 3,
+            }}>Ver nota</a>
+          )}
+          <button onClick={copy} style={{
+            fontSize: 11, padding: "3px 10px", borderRadius: 6,
+            border: `0.5px solid ${copied ? primary : "#E2E6ED"}`,
+            color: copied ? primary : "#6B7280",
+            background: copied ? `${primary}10` : "transparent",
+            display: "flex", alignItems: "center", gap: 3,
+            transition: "all .15s", cursor: "pointer",
+          }}>
+            {copied ? "✓ Copiado" : "Copiar"}
+          </button>
+        </div>
       </div>
     </article>
   );
 }
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Home() {
   const [data, setData] = useState<ClippingResult | null>(null);
@@ -112,24 +137,28 @@ export default function Home() {
   const [mode, setMode] = useState<"auto" | "topic" | "url">("auto");
   const [input, setInput] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("Todas");
-  const [config, setConfig] = useState<{ name: string; primaryColor: string; logoText: string; municipality: string } | null>(null);
+  const [config, setConfig] = useState<{
+    name: string; primaryColor: string; logoText: string;
+    logoUrl?: string; municipality: string;
+  } | null>(null);
 
   const primary = config?.primaryColor ?? "#1B3A5C";
 
-  // Load tenant config
+  function getTenant() {
+    if (typeof window === "undefined") return "bolivar";
+    return new URLSearchParams(window.location.search).get("tenant") ?? "bolivar";
+  }
+
   useEffect(() => {
-    const tenant = getTenantParam();
-    fetch(`/api/config?tenant=${tenant}`)
-      .then(r => r.json())
-      .then(setConfig)
-      .catch(console.error);
+    fetch(`/api/config?tenant=${getTenant()}`)
+      .then(r => r.json()).then(setConfig).catch(console.error);
   }, []);
 
   const fetchClipping = useCallback(async (refresh = false) => {
     setLoading(true);
     setError(null);
-    const tenant = getTenantParam();
-
+    setActiveCategory("Todas");
+    const tenant = getTenant();
     let url = `/api/clip?tenant=${tenant}&mode=${mode}`;
     if (mode === "topic" && input) url += `&topic=${encodeURIComponent(input)}`;
     if (mode === "url" && input) url += `&url=${encodeURIComponent(input)}`;
@@ -147,9 +176,9 @@ export default function Home() {
     }
   }, [mode, input]);
 
-  // Auto-load on mount
   useEffect(() => { fetchClipping(); }, []); // eslint-disable-line
 
+  // Filtro por categoría (badge)
   const filtered = data?.news.filter(n =>
     activeCategory === "Todas" || n.category === activeCategory
   ) ?? [];
@@ -157,62 +186,87 @@ export default function Home() {
   const categories = ["Todas", ...Array.from(new Set(data?.news.map(n => n.category) ?? []))];
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: 40 }}>
-      {/* ── Header ── */}
+    <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: 48 }}>
+
+      {/* ── HEADER ── */}
       <header style={{
-        background: primary, padding: "1rem 1.25rem 0.875rem",
+        background: primary,
+        padding: "0.875rem 1.25rem",
         position: "sticky", top: 0, zIndex: 20,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+
+          {/* Logo del municipio — reemplaza el nombre */}
+          {config?.logoUrl ? (
+            <img
+              src={config.logoUrl}
+              alt={config.name}
+              style={{ height: 36, maxWidth: 140, objectFit: "contain", filter: "brightness(0) invert(1)" }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          ) : (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 7,
+            }}>
+              <div style={{
+                width: 30, height: 30, background: "rgba(255,255,255,0.18)",
+                borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 15, fontWeight: 700, color: "#fff",
+                border: "1.5px solid rgba(255,255,255,0.25)",
+              }}>{config?.logoText ?? "C"}</div>
+              <span style={{ fontSize: 15, fontWeight: 600, color: "#fff", letterSpacing: 0.2 }}>
+                {config?.name ?? "Clipping"}
+              </span>
+            </div>
+          )}
+
+          {/* Clipping Magic badge — siempre visible */}
           <div style={{
-            width: 30, height: 30, background: "rgba(255,255,255,0.15)",
-            borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 15, fontWeight: 700, color: "#fff", border: "1.5px solid rgba(255,255,255,0.25)",
+            marginLeft: "auto",
+            background: "rgba(255,255,255,0.15)",
+            border: "1px solid rgba(255,255,255,0.25)",
+            borderRadius: 8, padding: "4px 10px",
+            display: "flex", alignItems: "center", gap: 5,
           }}>
-            {config?.logoText ?? "C"}
-          </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", letterSpacing: 0.3 }}>
-              {config?.name ?? "Clipping"}
-            </div>
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", letterSpacing: 1.5, textTransform: "uppercase" }}>
-              Municipio
-            </div>
-          </div>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{
-              background: "rgba(255,255,255,0.15)", borderRadius: 6,
-              padding: "3px 10px", fontSize: 11, color: "rgba(255,255,255,0.9)",
-            }}>✂ Clipping</span>
+            <span style={{ fontSize: 13 }}>✂</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#fff", letterSpacing: 0.3 }}>
+              Clipping <span style={{ fontStyle: "italic", fontWeight: 300 }}>magic</span>
+            </span>
           </div>
         </div>
+
+        {/* Subline */}
         {data && (
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", paddingLeft: 40 }}>
-            {formatDate(data.generatedAt)} · {data.news.length} noticias
+          <div style={{
+            fontSize: 11, color: "rgba(255,255,255,0.6)",
+            marginTop: 5, display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <span>📅 {new Date(data.generatedAt).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })}</span>
+            <span>·</span>
+            <span>{data.news.length} noticias</span>
             {"fromCache" in data && (
               <button onClick={() => fetchClipping(true)} style={{
-                marginLeft: 8, fontSize: 10, color: "rgba(255,255,255,0.7)",
-                background: "rgba(255,255,255,0.1)", border: "none",
-                borderRadius: 4, padding: "1px 6px", cursor: "pointer",
+                marginLeft: 4, fontSize: 10, color: "rgba(255,255,255,0.75)",
+                background: "rgba(255,255,255,0.12)", border: "none",
+                borderRadius: 4, padding: "2px 7px", cursor: "pointer",
               }}>↻ Actualizar</button>
             )}
           </div>
         )}
       </header>
 
-      {/* ── Search bar ── */}
+      {/* ── SEARCH BAR ── */}
       <div style={{ padding: "0.875rem 1rem 0", background: "#F4F5F7" }}>
-        {/* Mode tabs */}
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
           {(["auto", "topic", "url"] as const).map(m => (
             <button key={m} onClick={() => setMode(m)} style={{
-              flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 12, fontWeight: 500,
+              flex: 1, padding: "7px 0", borderRadius: 8, fontSize: 12, fontWeight: 500,
               background: mode === m ? primary : "#fff",
               color: mode === m ? "#fff" : "#6B7280",
               border: `1px solid ${mode === m ? primary : "#E2E6ED"}`,
-              transition: "all .15s",
+              transition: "all .15s", cursor: "pointer",
             }}>
-              {m === "auto" ? "🗞 General" : m === "topic" ? "🔍 Temático" : "🔗 URL"}
+              {m === "auto" ? "🗞 General" : m === "topic" ? "🔍 Sección" : "🔗 URL"}
             </button>
           ))}
         </div>
@@ -223,66 +277,93 @@ export default function Home() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && fetchClipping()}
-              placeholder={mode === "topic" ? "ej: seguridad, obras, salud…" : "https://…"}
+              placeholder={
+                mode === "topic"
+                  ? "ej: seguridad, deportes, salud, política…"
+                  : "https://presentenoticias.com/nota/…"
+              }
               style={{
-                flex: 1, padding: "8px 12px", borderRadius: 8, fontSize: 13,
+                flex: 1, padding: "9px 12px", borderRadius: 8, fontSize: 13,
                 border: "1px solid #E2E6ED", background: "#fff", color: "#111",
                 outline: "none",
               }}
             />
             <button onClick={() => fetchClipping()} style={{
-              padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-              background: primary, color: "#fff",
+              padding: "9px 16px", borderRadius: 8, fontSize: 13,
+              fontWeight: 600, background: primary, color: "#fff", cursor: "pointer",
             }}>Buscar</button>
           </div>
         )}
 
         {mode === "auto" && (
           <button onClick={() => fetchClipping()} style={{
-            width: "100%", padding: "8px 0", borderRadius: 8, fontSize: 13,
-            fontWeight: 600, background: primary, color: "#fff", marginBottom: 8,
+            width: "100%", padding: "9px 0", borderRadius: 8, fontSize: 13,
+            fontWeight: 600, background: primary, color: "#fff", marginBottom: 8, cursor: "pointer",
           }}>
             {loading ? "Generando…" : "Generar Clipping"}
           </button>
         )}
+
+        {mode === "topic" && (
+          <p style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 8, paddingLeft: 2 }}>
+            Buscá por la sección del portal: "política", "deportes", "policiales", "salud", etc.
+          </p>
+        )}
       </div>
 
-      {/* ── Topics ── */}
+      {/* ── TÓPICOS DEL DÍA ── */}
       {data?.topics && data.topics.length > 0 && (
         <div style={{
-          margin: "0 1rem 0", padding: "0.875rem 1rem",
-          background: "#fff", borderRadius: 12, border: "0.5px solid #E2E6ED",
+          margin: "0.75rem 1rem 0",
+          background: "#fff", borderRadius: 12,
+          border: "0.5px solid #E2E6ED",
+          padding: "0.875rem 1rem",
         }}>
           <div style={{
             fontSize: 10, fontWeight: 600, letterSpacing: "0.7px",
-            textTransform: "uppercase", color: primary, marginBottom: 8,
+            textTransform: "uppercase", color: primary, marginBottom: 10,
+            display: "flex", alignItems: "center", gap: 5,
           }}>
             🔥 Tópicos del día
+            <span style={{ fontSize: 9, fontWeight: 400, color: "#9CA3AF", textTransform: "none", letterSpacing: 0 }}>
+              — local · provincial · nacional
+            </span>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {data.topics.map((t, i) => (
-              <span key={i} style={{
-                fontSize: 11, padding: "4px 10px", borderRadius: 20,
-                background: `${primary}12`, color: primary,
-                border: `0.5px solid ${primary}30`, display: "flex", alignItems: "center", gap: 4,
-              }}>
-                {t.icon} {t.label}
-              </span>
-            ))}
+            {data.topics.map((t, i) => {
+              const scopeStyle = SCOPE_STYLES[t.scope ?? "local"] ?? SCOPE_STYLES.local;
+              return (
+                <span key={i} style={{
+                  fontSize: 11, padding: "4px 10px", borderRadius: 20,
+                  background: `${primary}10`, color: primary,
+                  border: `0.5px solid ${primary}30`,
+                  display: "flex", alignItems: "center", gap: 4,
+                }}>
+                  {t.icon} {t.label}
+                  {t.scope && (
+                    <span style={{
+                      fontSize: 9, padding: "1px 5px", borderRadius: 8,
+                      background: scopeStyle.bg, color: scopeStyle.text,
+                      marginLeft: 2,
+                    }}>{t.scope}</span>
+                  )}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* ── Category filter ── */}
+      {/* ── FILTRO POR CATEGORÍA ── */}
       {data && data.news.length > 0 && (
         <div style={{
-          display: "flex", gap: 6, overflowX: "auto", padding: "0.75rem 1rem 0",
-          scrollbarWidth: "none",
+          display: "flex", gap: 6, overflowX: "auto",
+          padding: "0.75rem 1rem 0", scrollbarWidth: "none",
         }}>
           {categories.map(cat => (
             <button key={cat} onClick={() => setActiveCategory(cat)} style={{
               flexShrink: 0, fontSize: 11, padding: "4px 12px", borderRadius: 20,
-              fontWeight: 500,
+              fontWeight: 500, cursor: "pointer",
               background: activeCategory === cat ? primary : "#fff",
               color: activeCategory === cat ? "#fff" : "#6B7280",
               border: `0.5px solid ${activeCategory === cat ? primary : "#E2E6ED"}`,
@@ -293,20 +374,21 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── News section label ── */}
+      {/* ── SECCIÓN LABEL ── */}
       {data && filtered.length > 0 && (
         <div style={{
           fontSize: 10, fontWeight: 600, letterSpacing: "0.7px",
           textTransform: "uppercase", color: "#9CA3AF",
           padding: "0.875rem 1.25rem 0.5rem",
         }}>
-          📰 Noticias · {filtered.length} resultados
+          📰 Noticias · {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
+          {activeCategory !== "Todas" && ` en ${activeCategory}`}
         </div>
       )}
 
-      {/* ── Content ── */}
+      {/* ── CARDS ── */}
       <div style={{ padding: "0 1rem" }}>
-        {loading && <Spinner />}
+        {loading && <Spinner primary={primary} />}
         {error && (
           <div style={{
             padding: "1rem", borderRadius: 12, background: "#FEF2F2",
@@ -318,7 +400,7 @@ export default function Home() {
         {!loading && filtered.map((item, i) => (
           <NewsCard key={i} item={item} primary={primary} />
         ))}
-        {!loading && data && filtered.length === 0 && (
+        {!loading && data && filtered.length === 0 && !error && (
           <div style={{
             textAlign: "center", padding: "32px 0", fontSize: 13, color: "#9CA3AF",
           }}>
@@ -327,25 +409,16 @@ export default function Home() {
         )}
       </div>
 
-      {/* ── Footer ── */}
+      {/* ── FOOTER ── */}
       {data && (
         <div style={{
           margin: "1.5rem 1.25rem 0", paddingTop: "1rem",
           borderTop: "0.5px solid #E2E6ED",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{
-              width: 18, height: 18, background: primary, borderRadius: 3,
-              fontSize: 10, fontWeight: 700, color: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              {config?.logoText ?? "C"}
-            </div>
-            <span style={{ fontSize: 10, color: "#9CA3AF" }}>
-              {config?.name} Municipio · Clipping Magic
-            </span>
-          </div>
+          <span style={{ fontSize: 10, color: "#9CA3AF" }}>
+            ✂ Clipping magic · {config?.name} Municipio
+          </span>
           <a href="/admin" style={{ fontSize: 10, color: "#9CA3AF", textDecoration: "underline" }}>
             Admin
           </a>

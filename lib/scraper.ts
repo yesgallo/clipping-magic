@@ -1,22 +1,34 @@
 // lib/scraper.ts
-// Proxy scraper: fetches HTML from portals, extracts text for LLM processing.
-// Falls back gracefully when a site blocks or times out.
-
 const USER_AGENT =
   "Mozilla/5.0 (compatible; ClippingMagicBot/1.0; +https://clipping.ar/bot)";
-
-const TIMEOUT_MS = 8000;
+const TIMEOUT_MS = 7000;
+const MAX_CHARS_PER_SOURCE = 1800;
 
 export interface ScrapeResult {
   url: string;
   domain: string;
   title: string;
-  text: string;       // Cleaned article text, max ~3000 chars
+  text: string;
+  section?: string; // ← sección/categoría detectada del portal
   ok: boolean;
   error?: string;
 }
 
-// Strip tags and condense whitespace
+// Detecta la sección de la URL: /noticias/seguridad/ → "seguridad"
+function extractSection(url: string): string | undefined {
+  try {
+    const path = new URL(url).pathname;
+    const parts = path.split("/").filter(Boolean);
+    // Busca segmentos que parezcan categorías (no IDs ni slugs con números)
+    const sectionWords = parts.find(
+      (p) => p.length > 3 && !/\d{4,}/.test(p) && p !== "noticias" && p !== "nota"
+    );
+    return sectionWords;
+  } catch {
+    return undefined;
+  }
+}
+
 function extractText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -24,6 +36,7 @@ function extractText(html: string): string {
     .replace(/<nav[\s\S]*?<\/nav>/gi, "")
     .replace(/<footer[\s\S]*?<\/footer>/gi, "")
     .replace(/<header[\s\S]*?<\/header>/gi, "")
+    .replace(/<aside[\s\S]*?<\/aside>/gi, "")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
@@ -31,15 +44,46 @@ function extractText(html: string): string {
     .replace(/&gt;/g, ">")
     .replace(/\s{2,}/g, " ")
     .trim()
-    .slice(0, 4000);
+    .slice(0, MAX_CHARS_PER_SOURCE);
 }
 
 function extractTitle(html: string): string {
   const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  return m ? m[1].replace(/<[^>]+>/g, "").trim() : "";
+  return m ? m[1].replace(/<[^>]+>/g, "").trim().slice(0, 120) : "";
 }
 
-export async function scrapeUrl(url: string): Promise<ScrapeResult> {
+// Extrae links de artículos del HTML del portal (hrefs con texto)
+function extractArticleLinks(html: string, baseUrl: string): Array<{ url: string; title: string; section?: string }> {
+  const base = new URL(baseUrl);
+  const links: Array<{ url: string; title: string; section?: string }> = [];
+  const seen = new Set<string>();
+
+  // Busca <a href="...">texto</a> con texto de más de 20 chars (titulares)
+  const linkRe = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m;
+  while ((m = linkRe.exec(html)) !== null && links.length < 30) {
+    const href = m[1].trim();
+    const text = m[2].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+
+    if (text.length < 25 || text.length > 200) continue;
+    if (/javascript:|mailto:|#/.test(href)) continue;
+
+    let fullUrl: string;
+    try {
+      fullUrl = href.startsWith("http") ? href : new URL(href, base).href;
+    } catch { continue; }
+
+    // Solo links del mismo dominio
+    if (!fullUrl.includes(base.hostname)) continue;
+    if (seen.has(fullUrl)) continue;
+    seen.add(fullUrl);
+
+    links.push({ url: fullUrl, title: text, section: extractSection(fullUrl) });
+  }
+  return links;
+}
+
+export async function scrapeUrl(url: string): Promise<ScrapeResult & { links?: Array<{ url: string; title: string; section?: string }> }> {
   const domain = new URL(url).hostname.replace("www.", "");
   try {
     const controller = new AbortController();
@@ -53,71 +97,64 @@ export async function scrapeUrl(url: string): Promise<ScrapeResult> {
         "Cache-Control": "no-cache",
       },
       signal: controller.signal,
+      cache: "no-store",
     });
     clearTimeout(timer);
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    const html = await res.text();
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error("No body reader");
+
+    let html = "";
+    let bytes = 0;
+    const decoder = new TextDecoder();
+    while (bytes < 200_000) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+      bytes += value.byteLength;
+    }
+    reader.cancel();
+
+    const links = extractArticleLinks(html, url);
+
     return {
       url,
       domain,
       title: extractTitle(html),
       text: extractText(html),
+      section: extractSection(url),
+      links,
       ok: true,
     };
   } catch (e: unknown) {
     return {
-      url,
-      domain,
-      title: "",
-      text: "",
-      ok: false,
+      url, domain, title: "", text: "", ok: false,
       error: e instanceof Error ? e.message : String(e),
     };
   }
 }
 
-// Scrape multiple URLs concurrently with a concurrency cap
 export async function scrapeMany(
   urls: string[],
-  concurrency = 4
-): Promise<ScrapeResult[]> {
-  const results: ScrapeResult[] = [];
+  concurrency = 3
+): Promise<ReturnType<typeof scrapeUrl> extends Promise<infer T> ? T[] : never> {
+  const results = [];
   for (let i = 0; i < urls.length; i += concurrency) {
     const batch = urls.slice(i, i + concurrency);
     const batchResults = await Promise.all(batch.map(scrapeUrl));
     results.push(...batchResults);
   }
-  return results;
+  return results as ReturnType<typeof scrapeUrl> extends Promise<infer T> ? T[] : never;
 }
 
-// Build candidate URLs to scrape for a given tenant
 export function buildSearchUrls(
-  municipality: string,
+  _municipality: string,
   sources: { local: string[]; regional: string[]; national: string[] },
-  extraTerms: string[]
 ): string[] {
-  const allDomains = [
-    ...sources.local,
-    ...sources.regional,
-    ...sources.national,
-  ];
-
-  // For each source, try common article listing paths
-  const paths = ["", "/noticias", "/noticias/", "/category/noticias/"];
-
-  const urls: string[] = [];
-  for (const domain of allDomains.slice(0, 8)) {
-    // cap at 8 for speed
-    urls.push(`https://${domain}${paths[0]}`);
-  }
-
-  // Add Google News search as a reliable fallback
-  const query = encodeURIComponent(
-    `${municipality} ${extraTerms[0] || ""} noticias`
-  );
-  urls.push(`https://news.google.com/search?q=${query}&hl=es-AR&gl=AR&ceid=AR:es`);
-
-  return urls;
+  const local = sources.local.map(d => `https://${d}`);
+  const regional = sources.regional.slice(0, 3).map(d => `https://${d}`);
+  const national = sources.national.slice(0, 1).map(d => `https://${d}`);
+  return [...local, ...regional, ...national];
 }

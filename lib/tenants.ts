@@ -1,26 +1,22 @@
 // lib/tenants.ts
-// Each tenant is a municipality or local news client.
-// Add new clients here — no code changes needed elsewhere.
-
 export interface TenantConfig {
   id: string;
-  name: string;               // Display name
-  municipality: string;       // Full name for searches
+  name: string;
+  municipality: string;
   province: string;
-  logoText: string;           // Short name for logo badge
-  primaryColor: string;       // Hex
+  logoText: string;
+  logoUrl?: string;         // ← NUEVO: URL/path al logo SVG o PNG
+  primaryColor: string;
   secondaryColor: string;
   accentColor: string;
   sources: {
-    local: string[];          // Domain list, local portals
-    regional: string[];       // Regional portals
-    national: string[];       // National portals with local coverage
+    local: string[];
+    regional: string[];
+    national: string[];
   };
-  searchTerms: string[];      // Extra terms beyond municipality name
-  adminPassword: string;      // Set per-tenant via env or here
+  searchTerms: string[];
+  adminPassword: string;
 }
-
-// ─── TENANT REGISTRY ────────────────────────────────────────────────────────
 
 const TENANTS: Record<string, TenantConfig> = {
   bolivar: {
@@ -29,6 +25,7 @@ const TENANTS: Record<string, TenantConfig> = {
     municipality: "San Carlos de Bolívar",
     province: "Buenos Aires",
     logoText: "B",
+    logoUrl: "/logos/bolivar.png",   // ← ponés el archivo en public/logos/bolivar.png
     primaryColor: "#1B3A5C",
     secondaryColor: "#4A7FB5",
     accentColor: "#B5D4F4",
@@ -54,22 +51,23 @@ const TENANTS: Record<string, TenantConfig> = {
     adminPassword: process.env.BOLIVAR_ADMIN_PASSWORD || "admin123",
   },
 
-  // ── TEMPLATE: duplicate and fill to add a new client ───────────────────
+  // ── TEMPLATE ──────────────────────────────────────────────────────────────
   // olavarria: {
   //   id: "olavarria",
   //   name: "Olavarría",
   //   municipality: "Olavarría",
   //   province: "Buenos Aires",
   //   logoText: "O",
+  //   logoUrl: "/logos/olavarria.png",
   //   primaryColor: "#2D5016",
   //   secondaryColor: "#5A8A30",
   //   accentColor: "#C5E8A0",
   //   sources: {
-  //     local: ["elpopular.com.ar", "infolavarria.com"],
+  //     local: ["elpopular.com.ar"],
   //     regional: ["septimaseccion.com.ar", "infocielo.com"],
   //     national: ["infocampo.com.ar"],
   //   },
-  //   searchTerms: ["Olavarría Buenos Aires", "intendente Wesner"],
+  //   searchTerms: ["Olavarría Buenos Aires"],
   //   adminPassword: process.env.OLAVARRIA_ADMIN_PASSWORD || "admin123",
   // },
 };
@@ -82,23 +80,13 @@ export function getAllTenants(): TenantConfig[] {
   return Object.values(TENANTS);
 }
 
-// Resolve tenant from hostname: bolivar.clipping.ar → "bolivar"
-// or from ?tenant=bolivar query param (dev mode)
 export function resolveTenantId(
   hostname: string,
   searchParams?: URLSearchParams
 ): string {
-  // Dev override
   const override = searchParams?.get("tenant");
   if (override && TENANTS[override]) return override;
-
-  // Subdomain: bolivar.yourdomain.com
   const parts = hostname.split(".");
-  if (parts.length >= 3) {
-    const sub = parts[0];
-    if (TENANTS[sub]) return sub;
-  }
-
-  // Default fallback
+  if (parts.length >= 3 && TENANTS[parts[0]]) return parts[0];
   return "bolivar";
 }
