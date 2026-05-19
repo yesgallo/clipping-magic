@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/clip?cron=1",
+      "schedule": "0 7 * * *"
+    }
+  ],
+  "functions": {
+    "app/api/clip/route.ts": { "maxDuration": 60 },
+    "app/api/scrape/route.ts": { "maxDuration": 30 }
+  }
+}
