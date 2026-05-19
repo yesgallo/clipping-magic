@@ -1,4 +1,4 @@
-// app/api/clip/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { getTenant, resolveTenantId } from "@/lib/tenants";
 import { scrapeMany, buildSearchUrls } from "@/lib/scraper";
@@ -9,8 +9,8 @@ import { ClippingResult } from "@/lib/types";
 export const maxDuration = 60;
 
 // ← Token budget: Groq free tier = 12k TPM. System prompt ≈ 800 tokens.
-// Leave 10k for user content → ~7500 chars (1 char ≈ 0.75 tokens avg Spanish)
-const MAX_CONTENT_CHARS = 7500;
+// Leave 10k for user content → ~4000 chars (1 char ≈ 0.75 tokens avg Spanish)
+const MAX_CONTENT_CHARS = 4000;
 
 export async function GET(req: NextRequest) {
   const { searchParams, hostname } = new URL(req.url);
