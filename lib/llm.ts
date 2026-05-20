@@ -3,11 +3,13 @@ import { TenantConfig } from "./tenants";
 import { ClippingResult, CATEGORIES } from "./types";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-// ✅ MODELO HARDCODEADO PARA FREE TIER (30k TPM vs 12k del 70B)
+
+// ✅ MODELO HARDCODEADO PARA GROQ FREE TIER (30k TPM vs 12k del 70B)
+// Esto evita el error 413 "Request too large"
 const GROQ_MODEL = "llama-3.1-8b-instant";
 
-// 🔍 DEBUG: Log para verificar en Vercel qué modelo se está usando
-console.log(`[LLM] Using Groq model: ${GROQ_MODEL}`);
+// 🔍 Debug log para verificar en Vercel
+console.log(`[LLM] Groq model configured: ${GROQ_MODEL}`);
 
 function buildSystemPrompt(tenant: TenantConfig, mode: string, queryTopic?: string): string {
   const categoryList = CATEGORIES.join(", ");
@@ -25,15 +27,15 @@ INSTRUCCIONES OBLIGATORIAS:
 1. TÓPICOS DEL DÍA (5 a 7):
    - Son los temas con mayor presencia editorial CRUZADA en todos los portales del contexto.
    - Pueden ser locales (de ${tenant.municipality}), provinciales (Buenos Aires) o nacionales (Argentina).
-   - Regla: si un tema aparece en 3 o más fuentes → es tópico.
+   - Regla: si un tema aparece en 2 o más fuentes → es tópico.
    - Formulá cada uno en 2-4 palabras concretas (ej: "Tarifas energía", "Seguridad rural", "Elecciones 2025").
    - NO limitarlos solo a noticias locales.
 
-2. NOTICIAS (generá entre 10 y 15 noticias relevantes basadas en el contexto. Si el contexto es limitado, generá noticias plausibles de conocimiento general sobre la región, marcándolas como 'Estimado'):
+2. NOTICIAS (generá entre 10 y 15 noticias relevantes):
    - Para MODO TEMÁTICO: incluir SOLO noticias cuya sección/categoría coincida con "${queryTopic}". Si no hay suficientes, indicarlo en el campo title con "Sin resultados en esta sección".
    - Para cada noticia incluir url si está disponible en el contexto.
    - Título claro, resumen 1-2 párrafos, lenguaje neutral e institucional.
-   - No inventar datos. Solo lo que esté en el contexto.
+   - No inventar datos. Solo lo que esté en el contexto. Si el contexto es limitado, podés generar noticias plausibles de conocimiento general sobre la región, marcándolas como "Estimado".
 
 ESQUEMA JSON (responder SOLO esto, sin texto extra, sin backticks):
 {
@@ -66,6 +68,9 @@ export async function generateClipping(
   const systemPrompt = buildSystemPrompt(tenant, mode, queryTopic);
   const userMessage = `Contenido scrapeado de los portales (${new Date().toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })}):\n\n${scrapedContent}\n\nGenerá el JSON del clipping ahora.`;
 
+  // 🔍 Log para debug en Vercel
+  console.log(`[LLM] Groq request: model=${GROQ_MODEL}, contentLength=${scrapedContent.length}`);
+
   const res = await fetch(GROQ_API_URL, {
     method: "POST",
     headers: {
@@ -73,13 +78,13 @@ export async function generateClipping(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: GROQ_MODEL,
+      model: GROQ_MODEL,  // ✅ Usa el modelo 8B hardcodeado
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
       temperature: 0.3,
-      max_tokens: 4096,
+      max_tokens: 3000,  // ✅ Reducido para free tier
       response_format: { type: "json_object" },
     }),
   });
@@ -127,13 +132,14 @@ export async function generateClippingOpenRouter(
       "X-Title": "Clipping Magic",
     },
     body: JSON.stringify({
+      // ✅ Modelo gratuito de OpenRouter como fallback
       model: "mistralai/mistral-7b-instruct:free",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `Contenido:\n\n${scrapedContent}\n\nGenerá el JSON.` },
       ],
       temperature: 0.3,
-      max_tokens: 4096,
+      max_tokens: 3000,
     }),
   });
 
