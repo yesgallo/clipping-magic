@@ -1,4 +1,4 @@
-// lib/scraper.ts
+
 const USER_AGENT =
   "Mozilla/5.0 (compatible; ClippingMagicBot/1.0; +https://clipping.ar/bot)";
 const TIMEOUT_MS = 7000;
@@ -136,6 +136,62 @@ export async function scrapeUrl(url: string): Promise<ScrapeResult & { links?: A
   }
 }
 
+export interface SearchUrlOptions {
+  maxLocal?: number;
+  maxProvincial?: number;
+  maxNational?: number;
+  timeFilter?: string; // Ej: "qdr:d2" para últimas 48hs
+}
+
+export function buildSearchUrls(
+  municipality: string,
+  sources: Array<{ url: string; searchQuery?: string; tier?: number; enabled?: boolean }>,
+  options: SearchUrlOptions = {}
+): string[] {
+  const {
+    maxLocal = 6,
+    maxProvincial = 4,
+    maxNational = 2,
+    timeFilter = "qdr:d2",
+  } = options;
+
+  const urls: string[] = [];
+  const province = "Buenos Aires"; // ← Personalizar según tenant si es necesario
+
+  // Helper para construir query de Google News
+  const buildGoogleNewsUrl = (query: string) => 
+    `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=nws&tbs=${timeFilter}`;
+
+  // Tier 1: Locales
+  const local = sources.filter(s => s.tier === 1 && s.enabled !== false).slice(0, maxLocal);
+  for (const src of local) {
+    const q = (src.searchQuery || `"${municipality}"`)
+      .replace("{city}", municipality)
+      .replace("{province}", province);
+    urls.push(buildGoogleNewsUrl(q));
+  }
+
+  // Tier 2: Provinciales
+  const provincial = sources.filter(s => s.tier === 2 && s.enabled !== false).slice(0, maxProvincial);
+  for (const src of provincial) {
+    const q = (src.searchQuery || `"${municipality}" OR "${province}"`)
+      .replace("{city}", municipality)
+      .replace("{province}", province);
+    urls.push(buildGoogleNewsUrl(q));
+  }
+
+  // Tier 3: Nacionales
+  const national = sources.filter(s => s.tier === 3 && s.enabled !== false).slice(0, maxNational);
+  for (const src of national) {
+    const q = (src.searchQuery || `"${municipality}" AND (gestión OR política OR economía)`)
+      .replace("{city}", municipality)
+      .replace("{province}", province);
+    urls.push(buildGoogleNewsUrl(q));
+  }
+
+  return urls;
+}
+
 export async function scrapeMany(
   urls: string[],
   concurrency = 3
@@ -149,12 +205,4 @@ export async function scrapeMany(
   return results as ReturnType<typeof scrapeUrl> extends Promise<infer T> ? T[] : never;
 }
 
-export function buildSearchUrls(
-  _municipality: string,
-  sources: { local: string[]; regional: string[]; national: string[] },
-): string[] {
-  const local = sources.local.map(d => `https://${d}`);
-  const regional = sources.regional.slice(0, 3).map(d => `https://${d}`);
-  const national = sources.national.slice(0, 1).map(d => `https://${d}`);
-  return [...local, ...regional, ...national];
-}
+// Note: simplified legacy buildSearchUrls removed to avoid duplicate export.
