@@ -9,8 +9,8 @@ import { ClippingResult } from "@/lib/types";
 export const maxDuration = 60;
 
 // ← Token budget: Groq free tier = 12k TPM. System prompt ≈ 800 tokens.
-// Leave 10k for user content → ~2000 chars (1 char ≈ 0.75 tokens avg Spanish)
-const MAX_CONTENT_CHARS = 2000;
+// Leave 10k for user content → ~1000 chars (1 char ≈ 0.75 tokens avg Spanish)
+const MAX_CONTENT_CHARS = 1000;
 
 export async function GET(req: NextRequest) {
   const { searchParams, hostname } = new URL(req.url);
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   }
 
   const scraped = await scrapeMany(urlsToScrape, 3);
-  const ok = scraped.filter((s) => s.ok && s.text.length > 100);
+  const ok = scraped.filter((s) => s.ok && s.text.length > 80);
 
   // Build context with strict char budget
   let scrapedContent: string;
