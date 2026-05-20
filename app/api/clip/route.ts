@@ -9,8 +9,8 @@ import { ClippingResult } from "@/lib/types";
 export const maxDuration = 60;
 
 // ✅ Token budget reducido para Groq free tier (modelo 8B = 30k TPM)
-// System prompt ≈ 800 tokens → dejamos ~450 tokens para contenido ≈ 600 chars
-const MAX_CONTENT_CHARS = 600;
+// System prompt ≈ 800 tokens → dejamos ~450 tokens para contenido ≈ 2.500 chars
+const MAX_CONTENT_CHARS = 2500;
 
 export async function GET(req: NextRequest) {
   const { searchParams, hostname } = new URL(req.url);
@@ -44,27 +44,30 @@ export async function GET(req: NextRequest) {
   }
 
   const scraped = await scrapeMany(urlsToScrape, 3);
-  const ok = scraped.filter((s) => s.ok && s.text.length > 80);
+  const ok = scraped.filter((s) => s.ok && s.text.length > 30);
 
   // Build context with strict char budget
   let scrapedContent: string;
   if (ok.length > 0) {
-    // ✅ Limitar a 1 artículo máximo + truncar agresivamente
-    const limited = ok.slice(0, 1);
+    // ✅ Limitar a 3 artículo máximo + truncar agresivamente
+    const limited = ok.slice(0, 3);
     const pieces = limited.map(s => {
-      const title = s.title.slice(0, 80);
-      const text = s.text.slice(0, 520); // 80 + 520 = 600 total
+      const title = s.title.slice(0, 120);
+      const text = s.text.slice(0, 680); // 120 + 560 = 680 total
       return `=== ${s.domain} ===\n${title}\n${text}`;
     });
     scrapedContent = pieces.join("\n\n---\n\n").slice(0, MAX_CONTENT_CHARS);
   } else {
-    scrapedContent = `No se pudo acceder a los portales. Generá 5 noticias ficticias plausibles sobre ${tenant.municipality}, ${tenant.province} para hoy ${new Date().toLocaleDateString("es-AR")} usando conocimiento general de Argentina. Formato JSON estricto.`;
+    scrapedContent = `No se pudo acceder a los portales. Generá 10-15 noticias ficticias pero PLAUSIBLES sobre ${tenant.municipality}, ${tenant.province} para hoy ${new Date().toLocaleDateString("es-AR")}. 
+Incluí variedad de categorías: deportes, cultura, seguridad, obras, salud, gestión municipal. 
+Formato JSON estricto, lenguaje institucional.`;
   }
 
   // 🔍 Debug log para verificar en Vercel
   console.log(`[CLIP] Tenant: ${tenantId}, Mode: ${mode}, Content length: ${scrapedContent.length} chars`);
-
-  // --- LLM ---
+  console.log(`[SCRAPING] Total: ${scraped.length}, OK: ${ok.length}, Content chars: ${scrapedContent.length}`);
+  
+// --- LLM ---
   let llmResult: Partial<ClippingResult>;
   try {
     llmResult = await generateClipping(tenant, scrapedContent, mode, queryTopic);
@@ -88,7 +91,7 @@ export async function GET(req: NextRequest) {
         queryTopic,
         topics: [
           { label: "Actualidad local", icon: "🏘️", scope: "local" },
-          { label: "Gestión municipal", icon: "🏛️", scope: "local" }
+          { label: "Política", icon: "🏛️", scope: "local" }
         ],
         news: [
           {

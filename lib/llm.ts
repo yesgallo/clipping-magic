@@ -25,11 +25,11 @@ INSTRUCCIONES OBLIGATORIAS:
 1. TÓPICOS DEL DÍA (5 a 7):
    - Son los temas con mayor presencia editorial CRUZADA en todos los portales del contexto.
    - Pueden ser locales (de ${tenant.municipality}), provinciales (Buenos Aires) o nacionales (Argentina).
-   - Regla: si un tema aparece en 2 o más fuentes → es tópico.
+   - Regla: si un tema aparece en 3 o más fuentes → es tópico.
    - Formulá cada uno en 2-4 palabras concretas (ej: "Tarifas energía", "Seguridad rural", "Elecciones 2025").
    - NO limitarlos solo a noticias locales.
 
-2. NOTICIAS (exactamente 20, o todas las disponibles si hay menos):
+2. NOTICIAS (generá entre 10 y 15 noticias relevantes basadas en el contexto. Si el contexto es limitado, generá noticias plausibles de conocimiento general sobre la región, marcándolas como 'Estimado'):
    - Para MODO TEMÁTICO: incluir SOLO noticias cuya sección/categoría coincida con "${queryTopic}". Si no hay suficientes, indicarlo en el campo title con "Sin resultados en esta sección".
    - Para cada noticia incluir url si está disponible en el contexto.
    - Título claro, resumen 1-2 párrafos, lenguaje neutral e institucional.
