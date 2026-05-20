@@ -1,0 +1,44 @@
+{
+  "tiers": [
+    {
+      "level": 1,
+      "name": "Locales",
+      "sources": [
+        { "id": "presente", "name": "Presente Noticias", "url": "https://presentenoticias.com", "enabled": true },
+        { "id": "lamanana", "name": "Diario La Mañana", "url": "https://diariolamanana.com.ar", "enabled": true },
+        { "id": "quepasa", "name": "Qué Pasa en Bolívar", "url": "https://quepasaenbolivar.com.ar", "enabled": true },
+        { "id": "fm10", "name": "FM 10 Bolívar", "url": "https://fm10bolivar.com.ar", "enabled": true },
+        { "id": "bolivarhoy", "name": "Bolívar Hoy", "url": "https://bolivarhoy.com.ar", "enabled": true },
+        { "id": "hablemos", "name": "Hablemos de Política", "url": "https://hablemosdepolitica.com.ar/", "enabled": true }
+      ]
+    },
+    {
+      "level": 2,
+      "name": "Provinciales",
+      "sources": [
+        { "id": "septima", "name": "Séptima Sección", "url": "https://septimaseccion.com.ar", "enabled": true },
+        { "id": "lapolitica", "name": "La Política Online", "url": "https://lapoliticaonline.com", "enabled": true },
+        { "id": "infocielo", "name": "Infocielo", "url": "https://infocielo.com", "enabled": true },
+        { "id": "latecla", "name": "La Tecla", "url": "https://latecla.info", "enabled": true },
+        { "id": "nova", "name": "Nova Bonaerense", "url": "https://novabonaerense.com/", "enabled": true },
+        { "id": "provincia", "name": "Provincia Noticias", "url": "https://provincianoticias.com.ar/", "enabled": true },
+        { "id": "destape", "name": "El Destape", "url": "https://eldestapeweb.com/", "enabled": true }
+      ]
+    },
+    {
+      "level": 3,
+      "name": "Nacionales",
+      "sources": [
+        { "id": "infocampo", "name": "InfoCampo", "url": "https://infocampo.com.ar", "enabled": true },
+        { "id": "perfil", "name": "Perfil", "url": "https://perfil.com", "enabled": true },
+        { "id": "ambito", "name": "Ámbito Financiero", "url": "https://ambito.com", "enabled": true },
+        { "id": "infobae", "name": "Infobae", "url": "https://infobae.com/", "enabled": true },
+        { "id": "lanacion", "name": "La Nación", "url": "https://lanacion.com.ar/", "enabled": true }
+      ]
+    }
+  ],
+  "metadata": {
+    "lastUpdated": "2024-05-20",
+    "defaultTenant": "bolivar"
+  }
+}
