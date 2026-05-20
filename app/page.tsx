@@ -1,7 +1,11 @@
+
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { ClippingResult, CATEGORY_STYLES, SCOPE_STYLES, Category } from "@/lib/types";
 
+// ─────────────────────────────────────────────────────────────
+// SPINNER COMPONENT
+// ─────────────────────────────────────────────────────────────
 function Spinner({ primary }: { primary: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "48px 0" }}>
@@ -18,26 +22,47 @@ function Spinner({ primary }: { primary: string }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// BADGE COMPONENT (con soporte para categorías nuevas)
+// ─────────────────────────────────────────────────────────────
 function Badge({ category }: { category: Category }) {
-  const s = CATEGORY_STYLES[category] ?? { bg: "#eee", text: "#555", icon: "📌" };
+  const s = CATEGORY_STYLES[category] ?? { bg: "#F1EFE8", text: "#444441", icon: "📌" };
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 4,
       fontSize: 10, fontWeight: 600, letterSpacing: "0.4px",
       padding: "3px 9px", borderRadius: 20,
       background: s.bg, color: s.text,
+      whiteSpace: "nowrap",
     }}>
       {s.icon} {category}
     </span>
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// NEWS CARD COMPONENT (con validación robusta de URLs)
+// ─────────────────────────────────────────────────────────────
 function NewsCard({ item, primary }: { item: ClippingResult["news"][0]; primary: string }) {
   const [copied, setCopied] = useState(false);
-  const hasUrl = item.url && item.url.startsWith("http");
+  
+  // ✅ Validación robusta de URL: debe ser http/https y no demasiado larga
+  const isValidUrl = (url: string | null | undefined): boolean => {
+    if (!url) return false;
+    if (!url.startsWith("http://") && !url.startsWith("https://")) return false;
+    if (url.length > 500) return false; // Evitar URLs corruptas
+    try {
+      new URL(url); // Validar que sea URL parseable
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  
+  const hasValidUrl = isValidUrl(item.url);
 
   const copy = async () => {
-    const text = `${item.title}\n\n${item.summary}\n\nFuente: ${item.source} · ${item.date}${hasUrl ? `\n${item.url}` : ""}`;
+    const text = `${item.title}\n\n${item.summary}\n\nFuente: ${item.source} · ${item.date}${hasValidUrl ? `\n${item.url}` : ""}`;
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -53,8 +78,8 @@ function NewsCard({ item, primary }: { item: ClippingResult["news"][0]; primary:
         <Badge category={item.category as Category} />
       </div>
 
-      {/* Título — clickeable si hay URL */}
-      {hasUrl ? (
+      {/* Título — clickeable SOLO si hay URL válida */}
+      {hasValidUrl ? (
         <a href={item.url!} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
           <h3 style={{
             fontFamily: "'DM Serif Display', serif",
@@ -62,6 +87,7 @@ function NewsCard({ item, primary }: { item: ClippingResult["news"][0]; primary:
             color: primary, marginBottom: 8,
             textDecoration: "underline", textDecorationColor: `${primary}40`,
             textUnderlineOffset: 3,
+            cursor: "pointer",
           }}>{item.title} ↗</h3>
         </a>
       ) : (
@@ -84,18 +110,20 @@ function NewsCard({ item, primary }: { item: ClippingResult["news"][0]; primary:
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         borderTop: "0.5px solid #F0F2F5", marginTop: 12, paddingTop: 10,
-        gap: 8,
+        gap: 8, flexWrap: "wrap",
       }}>
         <div style={{ display: "flex", gap: 8, fontSize: 11, color: "#9CA3AF", alignItems: "center", flexWrap: "wrap", flex: 1 }}>
-          {hasUrl ? (
+          {hasValidUrl ? (
             <a href={item.url!} target="_blank" rel="noopener noreferrer"
-              style={{ color: primary, fontWeight: 500 }}>{item.source}</a>
+              style={{ color: primary, fontWeight: 500, textDecoration: "none" }}>
+              {item.source}
+            </a>
           ) : (
             <span style={{ fontWeight: 500, color: "#6B7280" }}>{item.source}</span>
           )}
           <span>·</span>
           <span>{item.date}</span>
-          {item.section && (
+          {item.section && item.section.trim().length > 0 && (
             <>
               <span>·</span>
               <span style={{
@@ -106,12 +134,13 @@ function NewsCard({ item, primary }: { item: ClippingResult["news"][0]; primary:
           )}
         </div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          {hasUrl && (
+          {hasValidUrl && (
             <a href={item.url!} target="_blank" rel="noopener noreferrer" style={{
               fontSize: 11, padding: "3px 10px", borderRadius: 6,
               border: `0.5px solid ${primary}40`,
               color: primary, background: `${primary}08`,
               display: "flex", alignItems: "center", gap: 3,
+              textDecoration: "none",
             }}>Ver nota</a>
           )}
           <button onClick={copy} style={{
@@ -130,6 +159,9 @@ function NewsCard({ item, primary }: { item: ClippingResult["news"][0]; primary:
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────────────────────────────
 export default function Home() {
   const [data, setData] = useState<ClippingResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -181,15 +213,38 @@ export default function Home() {
 
   useEffect(() => { fetchClipping(); }, []); // eslint-disable-line
 
-  // Filtro por categoría (badge)
-  const filtered = data?.news.filter(n =>
-    activeCategory === "Todas" || n.category === activeCategory
-  ) ?? [];
+  // ✅ Filtrar noticias no válidas:
+  // - Títulos con "sin resultados"
+  // - Títulos muy cortos (< 10 chars)
+  // - Categorías no reconocidas (fallback a "Comunidad")
+  const validNews = (data?.news ?? []).filter(n => {
+    const title = n.title?.toLowerCase() || "";
+    if (title.includes("sin resultados")) return false;
+    if (!n.title || n.title.trim().length < 10) return false;
+    return true;
+  }).map(n => ({
+    ...n,
+    // ✅ Normalizar categoría: "Gestión municipal" → "Gestión"
+    category: ((n.category as string) === "Gestión municipal" ? "Gestión" : n.category) as Category,
+  }));
 
-  const categories = ["Todas", ...Array.from(new Set(data?.news.map(n => n.category) ?? []))];
+  // Agrupar por categoría (solo noticias válidas)
+  const groupedNews = validNews.reduce((acc, item) => {
+    const cat = item.category || 'Comunidad';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(item);
+    return acc;
+  }, {} as Record<string, typeof validNews>);
+
+  // Categories para el filtro (basado en noticias válidas)
+  const categories = ["Todas", ...Array.from(new Set(validNews.map(n => n.category).filter(Boolean)))];
+  
+  const filtered = activeCategory === "Todas"
+    ? validNews
+    : validNews.filter(n => n.category === activeCategory);
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: 48 }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: 48, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
 
       {/* ── HEADER ── */}
       <header style={{
@@ -199,7 +254,7 @@ export default function Home() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
 
-          {/* Logo del municipio — reemplaza el nombre */}
+          {/* Logo del municipio */}
           {config?.logoUrl ? (
             <img
               src={config.logoUrl}
@@ -208,22 +263,20 @@ export default function Home() {
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
           ) : (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 7,
-            }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
               <div style={{
                 width: 30, height: 30, background: "rgba(255,255,255,0.18)",
                 borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 15, fontWeight: 700, color: "#fff",
                 border: "1.5px solid rgba(255,255,255,0.25)",
-              }}>{config?.logoText ?? "C"}</div>
+              }}>{config?.logoText?.charAt(0) ?? "C"}</div>
               <span style={{ fontSize: 15, fontWeight: 600, color: "#fff", letterSpacing: 0.2 }}>
                 {config?.name ?? "Clipping"}
               </span>
             </div>
           )}
 
-          {/* Clipping Magic badge — siempre visible */}
+          {/* Clipping Magic badge */}
           <div style={{
             marginLeft: "auto",
             background: "rgba(255,255,255,0.15)",
@@ -238,16 +291,16 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Subline */}
+        {/* Subline con fecha y contador */}
         {data && (
           <div style={{
             fontSize: 11, color: "rgba(255,255,255,0.6)",
-            marginTop: 5, display: "flex", alignItems: "center", gap: 8,
+            marginTop: 5, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
           }}>
             <span>📅 {new Date(data.generatedAt).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })}</span>
             <span>·</span>
-            <span>{data.news.length} noticias</span>
-            {"fromCache" in data && (
+            <span>{validNews.length} noticias</span>
+            {"fromCache" in data && data.fromCache && (
               <button onClick={() => fetchClipping(true)} style={{
                 marginLeft: 4, fontSize: 10, color: "rgba(255,255,255,0.75)",
                 background: "rgba(255,255,255,0.12)", border: "none",
@@ -277,11 +330,12 @@ export default function Home() {
             fontWeight: 600, background: primary, color: "#fff", 
             cursor: loading ? "wait" : "pointer",
             opacity: loading ? 0.8 : 1,
+            transition: "opacity .15s",
           }}>
             {loading ? "⏳" : "🔍"}
           </button>
         </div>
-        <p style={{ fontSize: 10, color: "#9CA3AF", marginTop: 6, paddingLeft: 2 }}>
+        <p style={{ fontSize: 10, color: "#9CA3AF", marginTop: 6, paddingLeft: 2, lineHeight: 1.4 }}>
           💡 Dejá el campo vacío y presioná 🔍 para generar el clipping automático del día
         </p>
       </div>
@@ -330,10 +384,11 @@ export default function Home() {
       )}
 
       {/* ── FILTRO POR CATEGORÍA ── */}
-      {data && data.news.length > 0 && (
+      {validNews.length > 0 && (
         <div style={{
           display: "flex", gap: 6, overflowX: "auto",
           padding: "0.75rem 1rem 0", scrollbarWidth: "none",
+          WebkitOverflowScrolling: "touch",
         }}>
           {categories.map(cat => (
             <button key={cat} onClick={() => setActiveCategory(cat)} style={{
@@ -342,6 +397,7 @@ export default function Home() {
               background: activeCategory === cat ? primary : "#fff",
               color: activeCategory === cat ? "#fff" : "#6B7280",
               border: `0.5px solid ${activeCategory === cat ? primary : "#E2E6ED"}`,
+              transition: "all .15s",
             }}>
               {cat}
             </button>
@@ -364,22 +420,34 @@ export default function Home() {
       {/* ── CARDS ── */}
       <div style={{ padding: "0 1rem" }}>
         {loading && <Spinner primary={primary} />}
+        
         {error && (
           <div style={{
             padding: "1rem", borderRadius: 12, background: "#FEF2F2",
             border: "0.5px solid #FECACA", color: "#991B1B", fontSize: 13, marginTop: 12,
           }}>
             ⚠️ {error}
+            <button 
+              onClick={() => fetchClipping()} 
+              style={{ marginLeft: 8, background: "none", border: "none", color: "#991B1B", textDecoration: "underline", cursor: "pointer", fontSize: 13 }}
+            >
+              Reintentar
+            </button>
           </div>
         )}
+        
         {!loading && filtered.map((item, i) => (
-          <NewsCard key={i} item={item} primary={primary} />
+          <NewsCard key={`${item.title}-${i}`} item={item} primary={primary} />
         ))}
+        
         {!loading && data && filtered.length === 0 && !error && (
           <div style={{
             textAlign: "center", padding: "32px 0", fontSize: 13, color: "#9CA3AF",
           }}>
-            No hay noticias en esta categoría.
+            {activeCategory === "Todas" 
+              ? "No se encontraron noticias válidas. Intentá actualizar." 
+              : `No hay noticias en "${activeCategory}".`
+            }
           </div>
         )}
       </div>
