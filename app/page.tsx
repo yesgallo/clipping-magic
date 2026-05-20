@@ -134,7 +134,6 @@ export default function Home() {
   const [data, setData] = useState<ClippingResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"auto" | "topic" | "url">("auto");
   const [input, setInput] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("Todas");
   const [config, setConfig] = useState<{
@@ -159,9 +158,13 @@ export default function Home() {
     setError(null);
     setActiveCategory("Todas");
     const tenant = getTenant();
-    let url = `/api/clip?tenant=${tenant}&mode=${mode}`;
-    if (mode === "topic" && input) url += `&topic=${encodeURIComponent(input)}`;
-    if (mode === "url" && input) url += `&url=${encodeURIComponent(input)}`;
+    
+    // Solo dos modos: auto (sin input) o url (con input)
+    let url = `/api/clip?tenant=${tenant}&mode=${input && input.startsWith('http') ? 'url' : 'auto'}`;
+    
+    if (input && input.startsWith('http')) {
+      url += `&url=${encodeURIComponent(input)}`;
+    }
     if (refresh) url += "&refresh=1";
 
     try {
@@ -174,7 +177,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [mode, input]);
+  }, [input]); 
 
   useEffect(() => { fetchClipping(); }, []); // eslint-disable-line
 
@@ -255,60 +258,32 @@ export default function Home() {
         )}
       </header>
 
-      {/* ── SEARCH BAR ── */}
-      <div style={{ padding: "0.875rem 1rem 0", background: "#F4F5F7" }}>
-        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-          {(["auto", "topic", "url"] as const).map(m => (
-            <button key={m} onClick={() => setMode(m)} style={{
-              flex: 1, padding: "7px 0", borderRadius: 8, fontSize: 12, fontWeight: 500,
-              background: mode === m ? primary : "#fff",
-              color: mode === m ? "#fff" : "#6B7280",
-              border: `1px solid ${mode === m ? primary : "#E2E6ED"}`,
-              transition: "all .15s", cursor: "pointer",
-            }}>
-              {m === "auto" ? "🗞 General" : m === "topic" ? "🔍 Sección" : "🔗 URL"}
-            </button>
-          ))}
-        </div>
-
-        {mode !== "auto" && (
-          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-            <input
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && fetchClipping()}
-              placeholder={
-                mode === "topic"
-                  ? "ej: seguridad, deportes, salud, política…"
-                  : "https://presentenoticias.com/nota/…"
-              }
-              style={{
-                flex: 1, padding: "9px 12px", borderRadius: 8, fontSize: 13,
-                border: "1px solid #E2E6ED", background: "#fff", color: "#111",
-                outline: "none",
-              }}
-            />
-            <button onClick={() => fetchClipping()} style={{
-              padding: "9px 16px", borderRadius: 8, fontSize: 13,
-              fontWeight: 600, background: primary, color: "#fff", cursor: "pointer",
-            }}>Buscar</button>
-          </div>
-        )}
-
-        {mode === "auto" && (
-          <button onClick={() => fetchClipping()} style={{
-            width: "100%", padding: "9px 0", borderRadius: 8, fontSize: 13,
-            fontWeight: 600, background: primary, color: "#fff", marginBottom: 8, cursor: "pointer",
+      {/* ── SEARCH BAR SIMPLIFICADA ── */}
+      <div style={{ padding: "0.875rem 1rem", background: "#F4F5F7" }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && fetchClipping()}
+            placeholder="https://portal.com/nota (opcional) — dejá vacío para clipping automático"
+            style={{
+              flex: 1, padding: "9px 12px", borderRadius: 8, fontSize: 13,
+              border: "1px solid #E2E6ED", background: "#fff", color: "#111",
+              outline: "none",
+            }}
+          />
+          <button onClick={() => fetchClipping()} disabled={loading} style={{
+            padding: "9px 16px", borderRadius: 8, fontSize: 13,
+            fontWeight: 600, background: primary, color: "#fff", 
+            cursor: loading ? "wait" : "pointer",
+            opacity: loading ? 0.8 : 1,
           }}>
-            {loading ? "Generando…" : "Generar Clipping"}
+            {loading ? "⏳" : "🔍"}
           </button>
-        )}
-
-        {mode === "topic" && (
-          <p style={{ fontSize: 11, color: "#9CA3AF", marginBottom: 8, paddingLeft: 2 }}>
-            Buscá por la sección del portal: "política", "deportes", "policiales", "salud", etc.
-          </p>
-        )}
+        </div>
+        <p style={{ fontSize: 10, color: "#9CA3AF", marginTop: 6, paddingLeft: 2 }}>
+          💡 Dejá el campo vacío y presioná 🔍 para generar el clipping automático del día
+        </p>
       </div>
 
       {/* ── TÓPICOS DEL DÍA ── */}

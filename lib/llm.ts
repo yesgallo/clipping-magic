@@ -3,7 +3,7 @@ import { TenantConfig } from "./tenants";
 import { ClippingResult, CATEGORIES } from "./types";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_MODEL = process.env.LLM_MODEL || "llama-3.1-8b-instant";
 
 function buildSystemPrompt(tenant: TenantConfig, mode: string, queryTopic?: string): string {
   const categoryList = CATEGORIES.join(", ");
