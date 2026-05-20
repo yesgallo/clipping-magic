@@ -3,7 +3,11 @@ import { TenantConfig } from "./tenants";
 import { ClippingResult, CATEGORIES } from "./types";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+// ✅ MODELO HARDCODEADO PARA FREE TIER (30k TPM vs 12k del 70B)
 const GROQ_MODEL = "llama-3.1-8b-instant";
+
+// 🔍 DEBUG: Log para verificar en Vercel qué modelo se está usando
+console.log(`[LLM] Using Groq model: ${GROQ_MODEL}`);
 
 function buildSystemPrompt(tenant: TenantConfig, mode: string, queryTopic?: string): string {
   const categoryList = CATEGORIES.join(", ");
